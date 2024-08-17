@@ -44,7 +44,7 @@ python main.py
 
 ## Results
 
-Using the following models, running for 50 evaluations, the results are as follows:
+Using the following models, averaged over 50 inference runs, the results are as follows:
 
 - Target Model: `gpt2-xl`
 - Draft Model: `gpt2`
