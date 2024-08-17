@@ -87,6 +87,11 @@ def sample(probs: torch.Tensor, num_samples: int = 1) -> torch.Tensor:
     return torch.multinomial(probs, num_samples=num_samples)
 
 
+def sample_no_synchronize(probs: torch.Tensor, num_samples: int = 1) -> torch.Tensor:
+    gumbel_noise = -torch.empty_like(probs).exponential_().log()
+    return torch.argmax(probs.log() + gumbel_noise, dim=-1, keepdim=True)
+
+
 def max_fn(x):
     x_max = torch.where(x > 0, x, torch.zeros_like(x))
     x_max_sum = torch.sum(x_max, dim=1, keepdim=True)

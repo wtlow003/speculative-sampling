@@ -1,6 +1,13 @@
 import torch
 
-from .utils import batch_norm_logits, max_fn, norm_logits, sample, timer
+from .utils import (
+    batch_norm_logits,
+    max_fn,
+    norm_logits,
+    sample,
+    sample_no_synchronize,
+    timer,
+)
 
 
 # adapted from: https://github.com/feifeibear/LLMSpeculativeSampling/blob/main/sampling/speculative_sampling.py
@@ -15,12 +22,9 @@ def speculative_sampling(
     temperature: float,
     top_k: int,
     top_p: float,
-    eps: float = 1e-7,
+    eps: float = 1e-10,
 ):
-
-    # x = [batch_size, seq_len]
     seq_len = x.shape[1]
-    # T = maximum length to generate
     T = seq_len + N
 
     # we will be increasing input x length until it reaches T
@@ -28,64 +32,80 @@ def speculative_sampling(
         prefix = x
         x_len = x.shape[1]
 
-        # step 1: auto-regressive decode K draft tokens and get q probability distribution
-        # iterate over number of draft tokens to generate
+        # -----------------------------------------
+        # Step 1: Generate K tokens from draft_model
+        # -----------------------------------------
+        generated_tokens = []
         for _ in range(K):
-            # forward pass through draft model
             outputs = draft_model(prefix)
-            # shape: [batch_size, seq_len, vocab_size]
             p = outputs.logits
-            # sample next token from logits from the last token position
             next_token = sample(
                 norm_logits(p[:, -1, :], temperature, top_k, top_p, eps)
             )
-            # [batch_size, prefix_len + K_i + 1]
+            generated_tokens.append(next_token)
             prefix = torch.cat([prefix, next_token], dim=1)
 
-        # # [batch_size, prefix_len + K, vocab_size]
-        # for i in range(p.shape[1]):  # type: ignore
-        #     p[:, i, :] = norm_logits(p[:, i, :], temperature, top_k, top_p, eps)  # type: ignore
+        generated_tokens = torch.cat(generated_tokens, dim=1)
         p = batch_norm_logits(p, temperature, top_k, top_p, eps)  # type: ignore
 
-        # step 2: generate K+1 sets of logits from draft with target model
-        outputs = target_model(prefix)
-        q = outputs.logits
-        # normalize logits
-        # for i in range(q.shape[1]):
-        #     q[:, i, :] = norm_logits(q[:, i, :], temperature, top_k, top_p, eps)
+        # --------------------------------------------
+        # Step 2: Evaluate full sequence + K draft tokens using target_model
+        # --------------------------------------------
+        q = target_model(prefix).logits
         q = batch_norm_logits(q, temperature, top_k, top_p, eps)
 
-        # append draft tokens based on rejection sampling and resample if not accepted
-        is_all_accepted = True
+        # ------------------------------
+        # Step 3: Single Round Rejection Sampling Process
+        # ------------------------------
         n = x_len - 1
-        for i in range(K):
-            # generate r from uniform distribution
-            # dim=1
-            r = torch.rand(1, device=x.device)
-            draft_idx = prefix[:, x_len + i]
+        target_probs = torch.gather(
+            q[:, n : n + K, :], 2, generated_tokens.unsqueeze(-1)
+        ).squeeze(-1)
+        draft_probs = torch.gather(
+            p[:, n : n + K, :], 2, generated_tokens.unsqueeze(-1)
+        ).squeeze(-1)
 
-            # TODO: enhance understanding
-            target_prob_k_i = q[:, x_len + i - 1, draft_idx]
-            draft_prob_k_i = p[:, x_len + i - 1, draft_idx]  # type: ignore
+        # acceptance probabilities for all K tokens
+        acceptance_probs = torch.minimum(
+            torch.ones_like(target_probs), target_probs / draft_probs
+        )
 
-            if r < torch.min(
-                torch.tensor([1], device=x.device), (target_prob_k_i / draft_prob_k_i)
-            ):
-                # accepted
-                n += 1
-            else:
-                # rejected
-                # resample from the recovered distribution of target model
-                t = sample(max_fn(q[:, n, :] - p[:, n, :]))  # type: ignore
-                is_all_accepted = False
-                break
+        random_vals = torch.rand_like(acceptance_probs)
 
-        x = prefix[:, : n + 1]
+        # determine which tokens are accepted
+        accepted_tokens = random_vals < acceptance_probs
 
-        if is_all_accepted:
-            # target model generated K+1 logits, we are using the last logit to sample the next token
-            t = sample(q[:, -1, :])  # type: ignore
+        # ------------------------------
+        # Step 4: Combine Results and Resample if Necessary
+        # ------------------------------
+        # determine where the first rejection occurs for each sequence
+        first_rejection_indices = torch.nonzero(~accepted_tokens, as_tuple=True)[1]
 
-        x = torch.cat([x, t], dim=1)  # type: ignore
+        if first_rejection_indices.all():
+            # if all tokens are accepted
+            x = torch.cat([x, generated_tokens], dim=1)
+            next_token = sample(q[:, -1, :])
+        else:
+            # if there is at least one rejection
+            first_rejection_index = first_rejection_indices[0].item()
+            x = torch.cat([x, generated_tokens[:, :first_rejection_index]], dim=1)
+            # recover probability distribution
+            next_token = sample(
+                max_fn(
+                    q[:, n + first_rejection_index, :]  # type: ignore
+                    - p[:, n + first_rejection_index, :]  # type: ignore
+                )
+            )
+            print(
+                "rejected at",
+                n + first_rejection_index,
+                " rejected token:",
+                generated_tokens[:, first_rejection_index],
+                " resampled token:",
+                next_token.squeeze(-1),
+            )
+
+        # add newly generated token to x
+        x = torch.cat([x, next_token], dim=1)
 
     return x

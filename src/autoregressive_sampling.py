@@ -1,6 +1,6 @@
 import torch
 
-from .utils import norm_logits, sample, timer
+from .utils import norm_logits, sample, sample_no_synchronize, timer
 
 
 @timer
@@ -12,7 +12,7 @@ def autoregressive_sampling(
     temperature: float = 1.0,
     top_k: int = 25,
     top_p: float = 0,
-    eps: float = 1e-7,
+    eps: float = 1e-10,
 ) -> torch.Tensor:
 
     # prefix length
@@ -22,15 +22,15 @@ def autoregressive_sampling(
     T = seq_len + N
 
     while seq_len < T:
-        output = model(x)
+        outputs = model(x)
         # [batch_size, n, vocab_size]
-        logits = output.logits
-        # [batch_size, vocab_size]
-        p = norm_logits(logits[:, -1, :], temperature, top_k, top_p, eps)
+        logits = outputs.logits
         # sample from the distribution
-        next_token_id = sample(p)
+        next_token_id = sample(
+            norm_logits(logits[:, -1, :], temperature, top_k, top_p, eps)
+        )
         # append the sampled token to the input
-        x = torch.cat((x, next_token_id), dim=1)
+        x = torch.cat([x, next_token_id], dim=1)
         seq_len += 1
 
     return x
