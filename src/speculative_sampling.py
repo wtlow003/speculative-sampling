@@ -23,6 +23,10 @@ def speculative_sampling(
     top_p: float,
     eps: float = 1e-10,
 ):
+    """
+    Implementation of Algorithm 2 in the paper - Accelerating Large Language Model Decoding
+    with Speculative Sampling (https://arxiv.org/abs/2302.01318).
+    """
     seq_len = x.shape[1]
     T = seq_len + N
 

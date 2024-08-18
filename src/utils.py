@@ -105,8 +105,13 @@ def compute_metrics(
 ):
     ar_avg = sum(autoregressive_timings[1:]) / len(autoregressive_timings[1:])
     ss_avg = sum(speculative_timings[1:]) / len(speculative_timings[1:])
-    ar_std = statistics.stdev(autoregressive_timings[1:])
-    ss_std = statistics.stdev(speculative_timings[1:])
+
+    if len(autoregressive_timings[1:]) > 1 and len(speculative_timings[1:]) > 1:
+        ar_std = statistics.stdev(autoregressive_timings[1:])
+        ss_std = statistics.stdev(speculative_timings[1:])
+    else:
+        ar_std = 0.0
+        ss_std = 0.0
 
     # calculate speedup
     speedup = ar_avg / ss_avg

@@ -21,9 +21,7 @@ def main(args: argparse.Namespace):
     DEVICE = (
         "cuda"
         if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
+        else "mps" if torch.backends.mps.is_available() else "cpu"
     )
 
     draft_model = AutoModelForCausalLM.from_pretrained(
@@ -42,7 +40,7 @@ def main(args: argparse.Namespace):
         device_map=DEVICE,
     )
 
-    input_ids: torch.Tensor = tokenizer.encode(args.input_str, return_tensors="pt")  # type: ignore
+    input_ids: torch.Tensor = tokenizer.encode(args.input_str, return_tensors="pt").to(DEVICE)  # type: ignore
 
     # skip the first
     ar_timings = []
@@ -54,10 +52,10 @@ def main(args: argparse.Namespace):
         output = autoregressive_sampling(
             input_ids,
             target_model,
-            N=40,
-            temperature=0,
-            top_k=0,
-            top_p=0,
+            N=args.N,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
         )
         ar_end = time.perf_counter()
         ar_timings.append(ar_end - ar_start)
@@ -72,11 +70,11 @@ def main(args: argparse.Namespace):
             input_ids,
             draft_model,
             target_model,
-            N=40,
-            K=4,
-            temperature=0,
-            top_k=0,
-            top_p=0,
+            N=args.N,
+            K=args.K,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
         )
         ss_end = time.perf_counter()
         ss_timings.append(ss_end - ss_start)
@@ -92,10 +90,16 @@ def main(args: argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--target-model", type=str, default="gpt2-xl", help="Target model"
+        "--target-model",
+        type=str,
+        default="gpt2-xl",
+        help="Target model",
+        required=True,
     )
-    parser.add_argument("--draft-model", type=str, default="gpt2", help="Draft model")
-    parser.add_argument("--input-str", type=str, required=True, help="Input string")
+    parser.add_argument(
+        "--draft-model", type=str, default="gpt2", help="Draft model", required=True
+    )
+    parser.add_argument("--input-str", type=str, help="Input string", required=True)
     parser.add_argument(
         "--num-runs", type=int, default=50, help="Number of LLM inference runs"
     )
