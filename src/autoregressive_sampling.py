@@ -3,6 +3,7 @@ import torch
 from .utils import norm_logits, sample, timer
 
 
+# https://github.com/feifeibear/LLMSpeculativeSampling/blob/main/sampling/autoregressive_sampling.py
 @timer
 @torch.no_grad()
 def autoregressive_sampling(
