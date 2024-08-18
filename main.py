@@ -1,4 +1,4 @@
-import statistics
+import argparse
 import time
 import warnings
 
@@ -7,45 +7,57 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.autoregressive_sampling import autoregressive_sampling
 from src.speculative_sampling import speculative_sampling
+from src.utils import compute_metrics
 
 warnings.filterwarnings("ignore")
 
 
-def main():
-    draft_model = AutoModelForCausalLM.from_pretrained(
-        "gpt2",
-        torch_dtype=torch.float32,
-        device_map="mps",
-        use_cache=False,
-    ).eval()
-    target_model = AutoModelForCausalLM.from_pretrained(
-        "gpt2-xl",
-        torch_dtype=torch.float32,
-        device_map="mps",
-        use_cache=False,
-    ).eval()
-    tokenizer = AutoTokenizer.from_pretrained(
-        "gpt2-xl",
-        torch_dtype=torch.float32,
-        device_map="mps",
+def main(args: argparse.Namespace):
+    """Entry point for the LLM inference script.
+
+    Args:
+        args (argparse.Namespace): Command line arguments
+    """
+    DEVICE = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
     )
 
-    input_str = "Once upon a time in Singapore"
-    input_ids = tokenizer.encode(input_str, return_tensors="pt").to("mps")  # type: ignore
+    draft_model = AutoModelForCausalLM.from_pretrained(
+        args.draft_model,
+        torch_dtype=torch.float32,
+        device_map=DEVICE,
+    ).eval()
+    target_model = AutoModelForCausalLM.from_pretrained(
+        args.target_model,
+        torch_dtype=torch.float32,
+        device_map=DEVICE,
+    ).eval()
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.target_model,
+        torch_dtype=torch.float32,
+        device_map=DEVICE,
+    )
+
+    input_ids: torch.Tensor = tokenizer.encode(args.input_str, return_tensors="pt")  # type: ignore
 
     # skip the first
     ar_timings = []
     ss_timings = []
-    for _ in range(51):
+    # add 1 to account for the first run which is slower but will not account for metrics
+    for _ in range(args.num_runs + 1):
         print("#" * 100)
         ar_start = time.perf_counter()
         output = autoregressive_sampling(
             input_ids,
             target_model,
             N=40,
-            temperature=1,
-            top_k=20,
-            top_p=0.9,
+            temperature=0,
+            top_k=0,
+            top_p=0,
         )
         ar_end = time.perf_counter()
         ar_timings.append(ar_end - ar_start)
@@ -62,9 +74,9 @@ def main():
             target_model,
             N=40,
             K=4,
-            temperature=1,
-            top_k=20,
-            top_p=0.9,
+            temperature=0,
+            top_k=0,
+            top_p=0,
         )
         ss_end = time.perf_counter()
         ss_timings.append(ss_end - ss_start)
@@ -74,19 +86,28 @@ def main():
         print("#" * 100)
         print("\n")
 
-    ar_avg = sum(ar_timings[1:]) / len(ar_timings[1:])
-    ss_avg = sum(ss_timings[1:]) / len(ss_timings[1:])
-    ar_std = statistics.stdev(ar_timings[1:])
-    ss_std = statistics.stdev(ss_timings[1:])
-    print(f"AR Avg: {ar_avg:.4f}, Std: {ar_std:.4f}")
-    print(f"SS Avg: {ss_avg:.4f}, Std: {ss_std:.4f}")
-    # calculate speedup
-    speedup = ar_avg / ss_avg
-    speedup_percentage = (speedup - 1) * 100
-
-    print(f"Speedup: {speedup:.2f}x")
-    print(f"Percentage improvement: {speedup_percentage:.2f}%")
+    compute_metrics(ar_timings, ss_timings)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--target-model", type=str, default="gpt2-xl", help="Target model"
+    )
+    parser.add_argument("--draft-model", type=str, default="gpt2", help="Draft model")
+    parser.add_argument("--input-str", type=str, required=True, help="Input string")
+    parser.add_argument(
+        "--num-runs", type=int, default=50, help="Number of LLM inference runs"
+    )
+    parser.add_argument(
+        "--N", type=int, default=40, help="Number of tokens to generate"
+    )
+    parser.add_argument(
+        "--K", type=int, default=4, help="Number of tokens to speculate"
+    )
+    parser.add_argument("--temperature", type=float, default=0, help="Temperature")
+    parser.add_argument("--top-k", type=int, default=0, help="Top k sampling")
+    parser.add_argument("--top-p", type=float, default=0, help="Top p sampling")
+    args = parser.parse_args()
+
+    main(args)

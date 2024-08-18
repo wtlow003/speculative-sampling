@@ -1,5 +1,7 @@
+import statistics
 import time
 from functools import wraps
+from typing import List
 
 import torch
 import torch.nn.functional as F
@@ -96,3 +98,21 @@ def max_fn(x):
     x_max = torch.where(x > 0, x, torch.zeros_like(x))
     x_max_sum = torch.sum(x_max, dim=1, keepdim=True)
     return x_max / x_max_sum
+
+
+def compute_metrics(
+    autoregressive_timings: List[float], speculative_timings: List[float]
+):
+    ar_avg = sum(autoregressive_timings[1:]) / len(autoregressive_timings[1:])
+    ss_avg = sum(speculative_timings[1:]) / len(speculative_timings[1:])
+    ar_std = statistics.stdev(autoregressive_timings[1:])
+    ss_std = statistics.stdev(speculative_timings[1:])
+
+    # calculate speedup
+    speedup = ar_avg / ss_avg
+    speedup_percentage = (speedup - 1) * 100
+
+    print(f"AR Avg: {ar_avg:.4f}, Std: {ar_std:.4f}")
+    print(f"SS Avg: {ss_avg:.4f}, Std: {ss_std:.4f}")
+    print(f"Speedup: {speedup:.2f}x")
+    print(f"Percentage improvement: {speedup_percentage:.2f}%")

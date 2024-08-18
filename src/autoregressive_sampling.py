@@ -1,6 +1,6 @@
 import torch
 
-from .utils import norm_logits, sample, sample_no_synchronize, timer
+from .utils import norm_logits, sample, timer
 
 
 @timer
@@ -14,7 +14,6 @@ def autoregressive_sampling(
     top_p: float = 0,
     eps: float = 1e-10,
 ) -> torch.Tensor:
-
     # prefix length
     # [batch_size, seq_len]
     seq_len = x.shape[1]

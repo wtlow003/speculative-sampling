@@ -5,7 +5,6 @@ from .utils import (
     max_fn,
     norm_logits,
     sample,
-    sample_no_synchronize,
     timer,
 )
 
@@ -98,9 +97,9 @@ def speculative_sampling(
             )
             print(
                 "rejected at",
-                n + first_rejection_index,
+                n + first_rejection_index + 1,
                 " rejected token:",
-                generated_tokens[:, first_rejection_index],
+                generated_tokens[:, first_rejection_index],  # type: ignore
                 " resampled token:",
                 next_token.squeeze(-1),
             )
