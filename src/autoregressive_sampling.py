@@ -14,6 +14,7 @@ def autoregressive_sampling(
     top_p: float = 0,
     eps: float = 1e-10,
 ) -> torch.Tensor:
+    """Implementation of Naive Autoregressive Sampling."""
     # prefix length
     # [batch_size, seq_len]
     seq_len = x.shape[1]
