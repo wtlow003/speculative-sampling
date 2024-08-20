@@ -97,7 +97,9 @@ python main.py --target-model gpt2-xl \
 
 ## Results
 
-The following results are obtained on a MacBook Pro M2 Pro Max with 32GB RAM comparing speculative sampling with naive autoregressive sampling in LLM inference:
+### MPS
+
+The following results are obtained on a MacBook Pro M2 Pro Max with 32GB RAM comparing speculative sampling with naive autoregressive sampling in LLM inference over multiple iterations:
 
 - `N`: 40
 - `K`: 4
@@ -125,7 +127,27 @@ The following results are obtained on a MacBook Pro M2 Pro Max with 32GB RAM com
 | Autoregressive Sampling | 50       | 2.86       |   0.16   | 1.00     |
 | Speculative Sampling    | 50       | 2.17       |   0.32   | 1.31     |
 
-Based on the results above, we observed that the speculative sampling method offers a significant speedup compared to the autoregressive sampling method.
+### CUDA
+
+The following results are obtained when running on 2x A6000 comparing speculative sampling with naive autoregressive sampling in LLM inference in a single iteration:
+
+- `N`: 50
+- `K`: 4
+- `temperature`: 0
+- `top-k`: 0
+- `top-p`: 0
+
+1. **Target Model**: [`Meta-Llama-3.1-70B-bnb-4bit`](https://huggingface.co/unsloth/Meta-Llama-3.1-70B-bnb-4bit) and **Draft Model**: [`Meta-Llama-3.1-8B-bnb-4bit`](https://huggingface.co/unsloth/Meta-Llama-3.1-8B-bnb-4bit)
+
+https://github.com/user-attachments/assets/3760c37d-78eb-4a4c-a557-a6e668a0e3d5
+
+| Method                  | time       | token/sec  | speedup  |
+| ----------------------- | ---------- | ---------- | -------- | 
+| Autoregressive Sampling | 27.7       |   1.79     | 1.00     |
+| Speculative Sampling    | 11.3       |   4.68     | ~2.61x   |
+
+
+Based on the mini experiment and results above, we observed that the speculative sampling method offers a significant speedup compared to the autoregressive sampling method.
 
 In our sanity check, we confirmed that when the target and draft models are identical, the speculative sampling method does not produce any rejected samples, since the tokens are sampled from the exact same probability distribution. Additionally, because the models are identical in size and we're essentially running the same model twice (more forward passes in the draft model), the speculative sampling method is expected to be slower than the autoregressive sampling method.
 
