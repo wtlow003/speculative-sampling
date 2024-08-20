@@ -10,7 +10,7 @@ from .utils import (
 
 
 # adapted from: https://github.com/feifeibear/LLMSpeculativeSampling/blob/main/sampling/speculative_sampling.py
-@timer
+# @timer
 @torch.no_grad()
 def speculative_sampling(
     x: torch.Tensor,
@@ -87,11 +87,17 @@ def speculative_sampling(
         if first_rejection_indices.all():
             # if all tokens are accepted
             x = torch.cat([x, generated_tokens], dim=1)
+            for token in generated_tokens[0]:
+                yield token, True
             next_token = sample(q[:, -1, :])
+            yield next_token[0], True
         else:
             # if there is at least one rejection
             first_rejection_index = first_rejection_indices[0].item()
-            x = torch.cat([x, generated_tokens[:, :first_rejection_index]], dim=1)
+            selected_tokens = generated_tokens[:, :first_rejection_index]
+            for token in selected_tokens[0]:
+                yield token, True
+            x = torch.cat([x, selected_tokens], dim=1)
             # recover probability distribution
             next_token = sample(
                 max_fn(
@@ -99,14 +105,15 @@ def speculative_sampling(
                     - p[:, n + first_rejection_index, :]  # type: ignore
                 )
             )
-            print(
-                "rejected at",
-                n + first_rejection_index + 1,
-                " rejected token:",
-                generated_tokens[:, first_rejection_index],  # type: ignore
-                " resampled token:",
-                next_token.squeeze(-1),
-            )
+            yield next_token[0], False
+            # print(
+            #     "rejected at",
+            #     n + first_rejection_index + 1,
+            #     " rejected token:",
+            #     generated_tokens[:, first_rejection_index],  # type: ignore
+            #     " resampled token:",
+            #     next_token.squeeze(-1),
+            # )
 
         # add newly generated token to x
         x = torch.cat([x, next_token], dim=1)

@@ -4,7 +4,7 @@ from .utils import norm_logits, sample, timer
 
 
 # https://github.com/feifeibear/LLMSpeculativeSampling/blob/main/sampling/autoregressive_sampling.py
-@timer
+# @timer
 @torch.no_grad()
 def autoregressive_sampling(
     x: torch.Tensor,
@@ -30,6 +30,7 @@ def autoregressive_sampling(
         next_token_id = sample(
             norm_logits(logits[:, -1, :], temperature, top_k, top_p, eps)
         )
+        yield next_token_id
         # append the sampled token to the input
         x = torch.cat([x, next_token_id], dim=1)
         seq_len += 1
