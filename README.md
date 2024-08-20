@@ -139,7 +139,7 @@ The following results are obtained when running on 2x A6000 comparing speculativ
 
 1. **Target Model**: [`Meta-Llama-3.1-70B-bnb-4bit`](https://huggingface.co/unsloth/Meta-Llama-3.1-70B-bnb-4bit) and **Draft Model**: [`Meta-Llama-3.1-8B-bnb-4bit`](https://huggingface.co/unsloth/Meta-Llama-3.1-8B-bnb-4bit)
 
-https://github.com/user-attachments/assets/3760c37d-78eb-4a4c-a557-a6e668a0e3d5
+https://github.com/user-attachments/assets/d66a4f56-2d61-4beb-8aad-8e0d5c91193b
 
 | Method                  | time       | token/sec  | speedup  |
 | ----------------------- | ---------- | ---------- | -------- | 
